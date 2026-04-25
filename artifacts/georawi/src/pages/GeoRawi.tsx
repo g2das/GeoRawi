@@ -56,6 +56,10 @@ export default function GeoRawi() {
   const [fullStoryPlace, setFullStoryPlace] = useState<Place | null>(null);
   const [progressPct, setProgressPct] = useState(0);
   const [continuityMsg, setContinuityMsg] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  const SIDEBAR_W = 300;
+  const TOGGLE_W = 38;
 
   const [earnedBadges, setEarnedBadges] = useState<Set<string>>(loadEarnedBadges);
   const earnedBadgesRef = useRef<Set<string>>(earnedBadges);
@@ -390,24 +394,73 @@ export default function GeoRawi() {
     <div style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden" }}>
       <div ref={mapContainerRef} style={{ width: "100%", height: "100%" }} />
 
-      {/* Side panel */}
+      {/* Sidebar animated wrapper */}
       <div
-        className="animate-slideInRight"
         style={{
           position: "fixed",
           top: 0,
           right: 0,
-          width: "min(320px, 90vw)",
           height: "100vh",
-          background: "var(--bg-panel)",
-          borderLeft: "1px solid var(--border-gold)",
-          backdropFilter: "blur(16px)",
-          display: "flex",
-          flexDirection: "column",
+          width: `${SIDEBAR_W + TOGGLE_W}px`,
           zIndex: 999,
-          overflowY: "auto",
+          transform: sidebarOpen ? "translateX(0)" : `translateX(${SIDEBAR_W}px)`,
+          transition: "transform 0.38s cubic-bezier(0.4, 0, 0.2, 1)",
+          display: "flex",
+          pointerEvents: "none",
         }}
       >
+        {/* Toggle tab */}
+        <div
+          style={{
+            width: `${TOGGLE_W}px`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            pointerEvents: "auto",
+            flexShrink: 0,
+          }}
+        >
+          <button
+            onClick={() => setSidebarOpen((v) => !v)}
+            title={sidebarOpen ? "إخفاء اللوحة" : "إظهار اللوحة"}
+            style={{
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-gold)",
+              borderRight: "none",
+              color: "var(--gold)",
+              width: "36px",
+              height: "56px",
+              borderRadius: "10px 0 0 10px",
+              cursor: "pointer",
+              fontSize: "18px",
+              lineHeight: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "-6px 0 20px rgba(0,0,0,0.55)",
+              transition: "background 0.2s ease, color 0.2s ease",
+              fontFamily: "monospace",
+            }}
+          >
+            {sidebarOpen ? "›" : "‹"}
+          </button>
+        </div>
+
+        {/* Side panel */}
+        <div
+          style={{
+            width: `${SIDEBAR_W}px`,
+            height: "100%",
+            background: "var(--bg-panel)",
+            borderLeft: "1px solid var(--border-gold)",
+            backdropFilter: "blur(16px)",
+            display: "flex",
+            flexDirection: "column",
+            overflowY: "auto",
+            pointerEvents: "auto",
+            flexShrink: 0,
+          }}
+        >
         {/* Header */}
         <div
           style={{
@@ -711,6 +764,7 @@ export default function GeoRawi() {
               })}
             </div>
           </div>
+        </div>
         </div>
       </div>
 

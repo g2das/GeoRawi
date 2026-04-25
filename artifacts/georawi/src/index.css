@@ -295,7 +295,7 @@ html, body, #root {
 .badge-popup {
   position: fixed;
   top: 50%;
-  left: 40%;
+  left: calc(50% - 169px);
   transform: translate(-50%, -50%);
   z-index: 3000;
   width: min(340px, calc(100vw - 60px));
