@@ -5,7 +5,6 @@ import {
   demoPath,
   haversineKm,
   interpolate,
-  loadVisited,
   saveVisited,
   clearVisited,
   PROXIMITY_KM,
@@ -14,12 +13,26 @@ import {
   INTERP_INTERVAL_MS,
   type Place,
 } from "@/lib/data";
+import {
+  BADGES,
+  loadEarnedBadges,
+  saveEarnedBadges,
+  clearEarnedBadges,
+  getBadgeById,
+  type Badge,
+} from "@/lib/badges";
+import { playBadgeSound } from "@/lib/audio";
 
 type JourneyStatus = "idle" | "running" | "done";
 
 interface StoryState {
   place: Place;
   visible: boolean;
+}
+
+interface BadgeToast {
+  badge: Badge;
+  leaving: boolean;
 }
 
 export default function GeoRawi() {
@@ -32,6 +45,7 @@ export default function GeoRawi() {
   const interpTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const interpStepRef = useRef(0);
   const isRunningRef = useRef(false);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [status, setStatus] = useState<JourneyStatus>("idle");
   const [currentPos, setCurrentPos] = useState(demoPath[0]);
@@ -43,41 +57,60 @@ export default function GeoRawi() {
   const [progressPct, setProgressPct] = useState(0);
   const [continuityMsg, setContinuityMsg] = useState(false);
 
+  const [earnedBadges, setEarnedBadges] = useState<Set<string>>(loadEarnedBadges);
+  const earnedBadgesRef = useRef<Set<string>>(earnedBadges);
+  earnedBadgesRef.current = earnedBadges;
+
+  const [badgeQueue, setBadgeQueue] = useState<string[]>([]);
+  const [currentToast, setCurrentToast] = useState<BadgeToast | null>(null);
+
   const visitedRef = useRef(visited);
   visitedRef.current = visited;
 
-  const checkProximity = useCallback((lat: number, lng: number) => {
-    let closest: Place | null = null;
-    let closestDist = Infinity;
+  const unlockBadges = useCallback((currentVisited: Set<string>, journeyDone: boolean) => {
+    const newIds: string[] = [];
 
-    for (const place of places) {
-      const d = haversineKm(lat, lng, place.lat, place.lng);
-      if (d < closestDist) {
-        closestDist = d;
-        closest = place;
-      }
+    if (currentVisited.size >= 1 && !earnedBadgesRef.current.has("first_discovery")) {
+      newIds.push("first_discovery");
+    }
+    if (currentVisited.size >= places.length && !earnedBadgesRef.current.has("kharj_explorer")) {
+      newIds.push("kharj_explorer");
+    }
+    if (journeyDone && !earnedBadgesRef.current.has("history_master")) {
+      newIds.push("history_master");
     }
 
-    setNearestPlace(closest);
-    setNearestDist(closestDist);
-
-    if (isRunningRef.current && closest && closestDist < PROXIMITY_KM && !visitedRef.current.has(closest.id)) {
-      const newVisited = new Set(visitedRef.current);
-      newVisited.add(closest.id);
-      saveVisited(newVisited);
-      setVisited(newVisited);
-      visitedRef.current = newVisited;
-
-      setStory({ place: closest, visible: true });
-      setContinuityMsg(false);
-
-      setTimeout(() => {
-        setContinuityMsg(true);
-      }, 1800);
-
-      updatePlaceMarker(closest.id, true);
+    if (newIds.length > 0) {
+      const updated = new Set(earnedBadgesRef.current);
+      for (const id of newIds) updated.add(id);
+      saveEarnedBadges(updated);
+      setEarnedBadges(updated);
+      earnedBadgesRef.current = updated;
+      setBadgeQueue((q) => [...q, ...newIds]);
     }
   }, []);
+
+  useEffect(() => {
+    if (badgeQueue.length === 0 || currentToast !== null) return;
+
+    const nextId = badgeQueue[0];
+    const badge = getBadgeById(nextId);
+    if (!badge) {
+      setBadgeQueue((q) => q.slice(1));
+      return;
+    }
+
+    playBadgeSound();
+    setCurrentToast({ badge, leaving: false });
+
+    toastTimerRef.current = setTimeout(() => {
+      setCurrentToast((t) => (t ? { ...t, leaving: true } : null));
+      setTimeout(() => {
+        setCurrentToast(null);
+        setBadgeQueue((q) => q.slice(1));
+      }, 420);
+    }, 3200);
+  }, [badgeQueue, currentToast]);
 
   const updatePlaceMarker = (id: string, isVisited: boolean) => {
     const marker = placeMarkersRef.current[id];
@@ -93,6 +126,48 @@ export default function GeoRawi() {
     }
   };
 
+  const checkProximity = useCallback(
+    (lat: number, lng: number) => {
+      let closest: Place | null = null;
+      let closestDist = Infinity;
+
+      for (const place of places) {
+        const d = haversineKm(lat, lng, place.lat, place.lng);
+        if (d < closestDist) {
+          closestDist = d;
+          closest = place;
+        }
+      }
+
+      setNearestPlace(closest);
+      setNearestDist(closestDist);
+
+      if (
+        isRunningRef.current &&
+        closest &&
+        closestDist < PROXIMITY_KM &&
+        !visitedRef.current.has(closest.id)
+      ) {
+        const newVisited = new Set(visitedRef.current);
+        newVisited.add(closest.id);
+        saveVisited(newVisited);
+        setVisited(newVisited);
+        visitedRef.current = newVisited;
+
+        setStory({ place: closest, visible: true });
+        setContinuityMsg(false);
+
+        setTimeout(() => {
+          setContinuityMsg(true);
+        }, 1800);
+
+        updatePlaceMarker(closest.id, true);
+        unlockBadges(newVisited, false);
+      }
+    },
+    [unlockBadges]
+  );
+
   const moveMarkerSmooth = useCallback(
     (fromLat: number, fromLng: number, toLat: number, toLng: number, onDone: () => void) => {
       if (interpTimerRef.current) clearInterval(interpTimerRef.current);
@@ -101,7 +176,11 @@ export default function GeoRawi() {
       interpTimerRef.current = setInterval(() => {
         interpStepRef.current += 1;
         const t = interpStepRef.current / INTERP_STEPS;
-        const pos = interpolate({ lat: fromLat, lng: fromLng }, { lat: toLat, lng: toLng }, t);
+        const pos = interpolate(
+          { lat: fromLat, lng: fromLng },
+          { lat: toLat, lng: toLng },
+          t
+        );
 
         if (markerRef.current) {
           markerRef.current.setLatLng([pos.lat, pos.lng]);
@@ -128,6 +207,7 @@ export default function GeoRawi() {
     if (idx >= demoPath.length - 1) {
       isRunningRef.current = false;
       setStatus("done");
+      unlockBadges(visitedRef.current, true);
       return;
     }
 
@@ -144,17 +224,25 @@ export default function GeoRawi() {
         isRunningRef.current = false;
         setStatus("done");
         setProgressPct(100);
+        unlockBadges(visitedRef.current, true);
       }
     });
-  }, [moveMarkerSmooth]);
+  }, [moveMarkerSmooth, unlockBadges]);
 
   const startJourney = useCallback(() => {
     if (status === "running") return;
 
     clearVisited();
+    clearEarnedBadges();
     const freshVisited = new Set<string>();
+    const freshBadges = new Set<string>();
     setVisited(freshVisited);
     visitedRef.current = freshVisited;
+    setEarnedBadges(freshBadges);
+    earnedBadgesRef.current = freshBadges;
+    setBadgeQueue([]);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setCurrentToast(null);
 
     for (const id of Object.keys(placeMarkersRef.current)) {
       updatePlaceMarker(id, false);
@@ -183,12 +271,19 @@ export default function GeoRawi() {
   const resetJourney = useCallback(() => {
     if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
     if (interpTimerRef.current) clearInterval(interpTimerRef.current);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     isRunningRef.current = false;
 
     clearVisited();
+    clearEarnedBadges();
     const emptyVisited = new Set<string>();
+    const emptyBadges = new Set<string>();
     setVisited(emptyVisited);
     visitedRef.current = emptyVisited;
+    setEarnedBadges(emptyBadges);
+    earnedBadgesRef.current = emptyBadges;
+    setBadgeQueue([]);
+    setCurrentToast(null);
 
     for (const id of Object.keys(placeMarkersRef.current)) {
       updatePlaceMarker(id, false);
@@ -226,20 +321,17 @@ export default function GeoRawi() {
     });
 
     L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+      attribution:
+        '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
       maxZoom: 19,
     }).addTo(map);
 
-    const markerEl = document.createElement("div");
-    markerEl.innerHTML = `
-      <div style="position:relative;width:40px;height:40px;">
+    const markerIcon = L.divIcon({
+      html: `<div style="position:relative;width:40px;height:40px;">
         <div class="pulse-ring"></div>
         <div class="pulse-ring pulse-ring-2"></div>
         <div class="marker-dot"></div>
-      </div>
-    `;
-    const markerIcon = L.divIcon({
-      html: markerEl.innerHTML,
+      </div>`,
       className: "geo-marker-icon",
       iconSize: [40, 40],
       iconAnchor: [20, 20],
@@ -249,10 +341,8 @@ export default function GeoRawi() {
     markerRef.current = marker;
 
     for (const place of places) {
-      const placeEl = document.createElement("div");
-      placeEl.innerHTML = `<div class="place-marker-dot"></div>`;
       const placeIcon = L.divIcon({
-        html: placeEl.innerHTML,
+        html: `<div class="place-marker-dot"></div>`,
         className: "place-marker-icon",
         iconSize: [12, 12],
         iconAnchor: [6, 6],
@@ -270,13 +360,13 @@ export default function GeoRawi() {
     }
 
     mapRef.current = map;
-
     setCurrentPos(startPos);
     checkProximity(startPos.lat, startPos.lng);
 
     return () => {
       if (stepTimerRef.current) clearTimeout(stepTimerRef.current);
       if (interpTimerRef.current) clearInterval(interpTimerRef.current);
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
     };
   }, []);
 
@@ -300,6 +390,7 @@ export default function GeoRawi() {
     <div style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden" }}>
       <div ref={mapContainerRef} style={{ width: "100%", height: "100%" }} />
 
+      {/* Side panel */}
       <div
         className="animate-slideInRight"
         style={{
@@ -317,6 +408,7 @@ export default function GeoRawi() {
           overflowY: "auto",
         }}
       >
+        {/* Header */}
         <div
           style={{
             padding: "20px 20px 16px",
@@ -360,14 +452,21 @@ export default function GeoRawi() {
 
           <div style={{ marginTop: "10px" }}>
             <span
-              className={`status-badge ${status === "running" ? "active" : status === "done" ? "done" : "idle"}`}
+              className={`status-badge ${
+                status === "running" ? "active" : status === "done" ? "done" : "idle"
+              }`}
             >
               <span
                 style={{
                   width: "6px",
                   height: "6px",
                   borderRadius: "50%",
-                  background: status === "running" ? "#4ad090" : status === "done" ? "#a0a0ff" : "var(--gold)",
+                  background:
+                    status === "running"
+                      ? "#4ad090"
+                      : status === "done"
+                      ? "#a0a0ff"
+                      : "var(--gold)",
                   display: "inline-block",
                   ...(status === "running"
                     ? { animation: "glowPulse 1.5s ease infinite" }
@@ -379,9 +478,15 @@ export default function GeoRawi() {
           </div>
         </div>
 
+        {/* Body */}
         <div style={{ padding: "16px 20px", flex: 1 }}>
+          {/* Location info */}
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <InfoRow icon="📍" label="الموقع الحالي" value={`${formatCoord(currentPos.lat)}، ${formatCoord(currentPos.lng)}`} />
+            <InfoRow
+              icon="📍"
+              label="الموقع الحالي"
+              value={`${formatCoord(currentPos.lat)}، ${formatCoord(currentPos.lng)}`}
+            />
             <div style={{ height: "1px", background: "rgba(196,160,90,0.1)" }} />
             <InfoRow
               icon="🏔️"
@@ -396,10 +501,16 @@ export default function GeoRawi() {
               highlight={nearestDist !== null && nearestDist < PROXIMITY_KM}
             />
             {nearestPlace && (
-              <InfoRow icon="📝" label="القصة المختصرة" value={nearestPlace.short} multiline />
+              <InfoRow
+                icon="📝"
+                label="القصة المختصرة"
+                value={nearestPlace.short}
+                multiline
+              />
             )}
           </div>
 
+          {/* Progress bar */}
           {status === "running" && (
             <div style={{ marginTop: "16px" }}>
               <div
@@ -415,11 +526,15 @@ export default function GeoRawi() {
                 <span>{Math.round(progressPct)}%</span>
               </div>
               <div className="progress-bar">
-                <div className="progress-fill" style={{ width: `${progressPct}%`, transition: "width 0.8s ease" }} />
+                <div
+                  className="progress-fill"
+                  style={{ width: `${progressPct}%`, transition: "width 0.8s ease" }}
+                />
               </div>
             </div>
           )}
 
+          {/* Action buttons */}
           <div style={{ marginTop: "20px", display: "flex", flexDirection: "column", gap: "10px" }}>
             <button
               className="btn-gold"
@@ -447,6 +562,7 @@ export default function GeoRawi() {
             </button>
           </div>
 
+          {/* Landmarks */}
           <div style={{ marginTop: "20px" }}>
             <div
               style={{
@@ -454,7 +570,6 @@ export default function GeoRawi() {
                 fontWeight: "700",
                 color: "var(--text-muted)",
                 marginBottom: "10px",
-                textTransform: "uppercase",
                 letterSpacing: "1px",
               }}
             >
@@ -472,13 +587,18 @@ export default function GeoRawi() {
                       background: isVisited
                         ? "rgba(42, 122, 90, 0.12)"
                         : "rgba(196,160,90,0.05)",
-                      border: `1px solid ${isVisited ? "rgba(42, 122, 90, 0.3)" : "rgba(196,160,90,0.15)"}`,
+                      border: `1px solid ${
+                        isVisited ? "rgba(42, 122, 90, 0.3)" : "rgba(196,160,90,0.15)"
+                      }`,
                       cursor: "pointer",
                       transition: "all 0.3s ease",
                     }}
                     onClick={() => {
                       if (mapRef.current) {
-                        mapRef.current.flyTo([place.lat, place.lng], 13, { animate: true, duration: 1.2 });
+                        mapRef.current.flyTo([place.lat, place.lng], 13, {
+                          animate: true,
+                          duration: 1.2,
+                        });
                       }
                       const pm = placeMarkersRef.current[place.id];
                       if (pm) pm.openPopup();
@@ -521,6 +641,7 @@ export default function GeoRawi() {
             </div>
           </div>
 
+          {/* All visited celebration */}
           {allVisited && (
             <div
               className="animate-fadeInUp"
@@ -542,17 +663,88 @@ export default function GeoRawi() {
               </div>
             </div>
           )}
+
+          {/* Badges section */}
+          <div style={{ marginTop: "20px" }}>
+            <div
+              style={{
+                fontSize: "11px",
+                fontWeight: "700",
+                color: "var(--text-muted)",
+                marginBottom: "10px",
+                letterSpacing: "1px",
+              }}
+            >
+              الإنجازات
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "7px" }}>
+              {BADGES.map((badge) => {
+                const isEarned = earnedBadges.has(badge.id);
+                return (
+                  <div key={badge.id} className={`badge-item ${isEarned ? "earned" : "locked"}`}>
+                    <span style={{ fontSize: "22px", lineHeight: 1, flexShrink: 0 }}>
+                      {badge.emoji}
+                    </span>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: "12px",
+                          fontWeight: "700",
+                          color: isEarned ? "var(--gold-light)" : "var(--text-muted)",
+                          marginBottom: "1px",
+                        }}
+                      >
+                        {badge.name}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "10px",
+                          color: isEarned ? "var(--text-secondary)" : "var(--text-muted)",
+                          lineHeight: 1.4,
+                        }}
+                      >
+                        {isEarned ? badge.description : "🔒 لم يُكتشف بعد"}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
       </div>
 
+      {/* Story card */}
       {story && story.visible && (
         <div className="story-card">
-          <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              justifyContent: "space-between",
+              gap: "12px",
+            }}
+          >
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "10px", color: "var(--text-muted)", fontWeight: "600", letterSpacing: "1px", marginBottom: "4px" }}>
+              <div
+                style={{
+                  fontSize: "10px",
+                  color: "var(--text-muted)",
+                  fontWeight: "600",
+                  letterSpacing: "1px",
+                  marginBottom: "4px",
+                }}
+              >
                 مشهد تاريخي
               </div>
-              <div style={{ fontSize: "16px", fontWeight: "800", color: "var(--gold-light)", marginBottom: "2px" }}>
+              <div
+                style={{
+                  fontSize: "16px",
+                  fontWeight: "800",
+                  color: "var(--gold-light)",
+                  marginBottom: "2px",
+                }}
+              >
                 📍 {story.place.sceneTitle}
               </div>
               <div style={{ fontSize: "13px", color: "var(--text-secondary)" }}>
@@ -626,6 +818,7 @@ export default function GeoRawi() {
         </div>
       )}
 
+      {/* Full story modal */}
       {fullStoryPlace && (
         <div
           className="animate-fadeIn"
@@ -671,10 +864,24 @@ export default function GeoRawi() {
             />
 
             <div style={{ marginBottom: "20px" }}>
-              <div style={{ fontSize: "11px", color: "var(--text-muted)", letterSpacing: "2px", marginBottom: "8px" }}>
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: "var(--text-muted)",
+                  letterSpacing: "2px",
+                  marginBottom: "8px",
+                }}
+              >
                 ✦ وثيقة تاريخية ✦
               </div>
-              <div style={{ fontSize: "22px", fontWeight: "900", color: "var(--gold-light)", marginBottom: "6px" }}>
+              <div
+                style={{
+                  fontSize: "22px",
+                  fontWeight: "900",
+                  color: "var(--gold-light)",
+                  marginBottom: "6px",
+                }}
+              >
                 {fullStoryPlace.sceneTitle}
               </div>
               <div style={{ fontSize: "14px", color: "var(--text-secondary)" }}>
@@ -711,13 +918,21 @@ export default function GeoRawi() {
               ✦ تستمر رحلتك عبر الزمن... ✦
             </div>
 
-            <button
-              className="btn-gold"
-              onClick={() => setFullStoryPlace(null)}
-            >
+            <button className="btn-gold" onClick={() => setFullStoryPlace(null)}>
               العودة إلى الرحلة
             </button>
           </div>
+        </div>
+      )}
+
+      {/* Badge popup toast */}
+      {currentToast && (
+        <div className={`badge-popup${currentToast.leaving ? " leaving" : ""}`}>
+          <div className="badge-popup-label">🏆 إنجاز جديد!</div>
+          <span className="badge-popup-emoji">{currentToast.badge.emoji}</span>
+          <div className="badge-popup-name">{currentToast.badge.name}</div>
+          <div className="badge-popup-divider" />
+          <div className="badge-popup-desc">{currentToast.badge.description}</div>
         </div>
       )}
     </div>
