@@ -143,7 +143,7 @@ html, body, #root {
   position: fixed;
   top: 0;
   right: 0;
-  width: min(300px, 100vw);
+  width: 300px;
   height: 100vh;
   height: 100dvh;
   background: var(--bg-panel);
@@ -152,7 +152,7 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   overflow-y: auto;
-  z-index: 999;
+  z-index: 1000;
   transform: translateX(0);
   transition: transform 0.3s ease;
 }
@@ -166,8 +166,8 @@ html, body, #root {
   top: 14px;
   right: 14px;
   z-index: 1001;
-  width: 40px;
-  height: 40px;
+  width: 42px;
+  height: 42px;
   border-radius: 10px;
   border: 1px solid var(--border-gold);
   background: var(--bg-card);
@@ -177,25 +177,39 @@ html, body, #root {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.5);
-  transition: background 0.2s ease, opacity 0.2s ease;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+  transition: background 0.2s ease;
   font-family: 'Cairo', sans-serif;
 }
 .sidebar-toggle-btn:hover {
   background: rgba(196,160,90,0.12);
 }
 
+/* ── Mobile backdrop ── */
+.sidebar-backdrop {
+  display: none;
+}
+
 @media (max-width: 640px) {
   .sidebar-panel {
-    width: 100vw;
-    border-left: none;
-    border-top: 1px solid var(--border-gold);
+    width: 88vw;
+    max-width: 340px;
+    border-left: 1px solid var(--border-gold);
+    box-shadow: -8px 0 32px rgba(0,0,0,0.7);
+  }
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.45);
+    z-index: 999;
   }
   .sidebar-toggle-btn {
     top: 12px;
     right: 12px;
-    width: 38px;
-    height: 38px;
+    width: 44px;
+    height: 44px;
+    font-size: 20px;
   }
 }
 

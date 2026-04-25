@@ -56,7 +56,7 @@ export default function GeoRawi() {
   const [fullStoryPlace, setFullStoryPlace] = useState<Place | null>(null);
   const [progressPct, setProgressPct] = useState(0);
   const [continuityMsg, setContinuityMsg] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(() => window.innerWidth > 640);
 
   const [earnedBadges, setEarnedBadges] = useState<Set<string>>(loadEarnedBadges);
   const earnedBadgesRef = useRef<Set<string>>(earnedBadges);
@@ -399,6 +399,11 @@ export default function GeoRawi() {
       >
         {sidebarOpen ? "✕" : "☰"}
       </button>
+
+      {/* Mobile backdrop — tap to close */}
+      {sidebarOpen && (
+        <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
+      )}
 
       {/* Sidebar */}
       <div className={`sidebar-panel${sidebarOpen ? "" : " sidebar-hidden"}`}>
