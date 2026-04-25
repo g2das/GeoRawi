@@ -58,9 +58,6 @@ export default function GeoRawi() {
   const [continuityMsg, setContinuityMsg] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
 
-  const SIDEBAR_W = 300;
-  const TOGGLE_W = 38;
-
   const [earnedBadges, setEarnedBadges] = useState<Set<string>>(loadEarnedBadges);
   const earnedBadgesRef = useRef<Set<string>>(earnedBadges);
   earnedBadgesRef.current = earnedBadges;
@@ -394,73 +391,17 @@ export default function GeoRawi() {
     <div style={{ width: "100vw", height: "100vh", position: "relative", overflow: "hidden" }}>
       <div ref={mapContainerRef} style={{ width: "100%", height: "100%" }} />
 
-      {/* Sidebar animated wrapper */}
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          right: 0,
-          height: "100vh",
-          width: `${SIDEBAR_W + TOGGLE_W}px`,
-          zIndex: 999,
-          transform: sidebarOpen ? "translateX(0)" : `translateX(${SIDEBAR_W}px)`,
-          transition: "transform 0.38s cubic-bezier(0.4, 0, 0.2, 1)",
-          display: "flex",
-          pointerEvents: "none",
-        }}
+      {/* Toggle button */}
+      <button
+        className="sidebar-toggle-btn"
+        onClick={() => setSidebarOpen((v) => !v)}
+        title={sidebarOpen ? "إخفاء اللوحة" : "إظهار اللوحة"}
       >
-        {/* Toggle tab */}
-        <div
-          style={{
-            width: `${TOGGLE_W}px`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            pointerEvents: "auto",
-            flexShrink: 0,
-          }}
-        >
-          <button
-            onClick={() => setSidebarOpen((v) => !v)}
-            title={sidebarOpen ? "إخفاء اللوحة" : "إظهار اللوحة"}
-            style={{
-              background: "var(--bg-card)",
-              border: "1px solid var(--border-gold)",
-              borderRight: "none",
-              color: "var(--gold)",
-              width: "36px",
-              height: "56px",
-              borderRadius: "10px 0 0 10px",
-              cursor: "pointer",
-              fontSize: "18px",
-              lineHeight: 1,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              boxShadow: "-6px 0 20px rgba(0,0,0,0.55)",
-              transition: "background 0.2s ease, color 0.2s ease",
-              fontFamily: "monospace",
-            }}
-          >
-            {sidebarOpen ? "›" : "‹"}
-          </button>
-        </div>
+        {sidebarOpen ? "✕" : "☰"}
+      </button>
 
-        {/* Side panel */}
-        <div
-          style={{
-            width: `${SIDEBAR_W}px`,
-            height: "100%",
-            background: "var(--bg-panel)",
-            borderLeft: "1px solid var(--border-gold)",
-            backdropFilter: "blur(16px)",
-            display: "flex",
-            flexDirection: "column",
-            overflowY: "auto",
-            pointerEvents: "auto",
-            flexShrink: 0,
-          }}
-        >
+      {/* Sidebar */}
+      <div className={`sidebar-panel${sidebarOpen ? "" : " sidebar-hidden"}`}>
         {/* Header */}
         <div
           style={{
@@ -764,7 +705,6 @@ export default function GeoRawi() {
               })}
             </div>
           </div>
-        </div>
         </div>
       </div>
 
