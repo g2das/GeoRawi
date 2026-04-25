@@ -1,0 +1,156 @@
+"}
+Build a HIGHLY STABLE Arabic web app prototype called "GeoRawi" using ONLY HTML, CSS, and JavaScript.
+
+NO AUDIO, NO TEXT-TO-SPEECH, NO EXTERNAL COMPLEX FRAMEWORKS.
+
+GOAL:
+A clean, cinematic, documentary-style interactive map experience that tells historical stories visually and through text only.
+
+---------------------------------------
+1. CORE PRINCIPLE:
+---------------------------------------
+- This is NOT a tracking app
+- This is a STORY EXPERIENCE ON A MAP
+- Everything must feel smooth, controlled, and intentional
+
+---------------------------------------
+2. UI DESIGN:
+---------------------------------------
+- Fully Arabic RTL layout (dir="rtl")
+- Use modern clean font (Cairo or Tajawal)
+- Minimal UI, high readability
+- Dark + light contrast balanced
+
+Main UI panel:
+- 📍 الموقع الحالي
+- 🏔️ المعلم القريب
+- 📏 المسافة
+- 📝 القصة المختصرة
+
+Buttons:
+- "🚗 بدء التجربة"
+- "📖 اقرأ القصة الكاملة"
+- "🔁 إعادة التجربة"
+
+---------------------------------------
+3. MAP SYSTEM (CRITICAL STABILITY RULE):
+---------------------------------------
+Use Leaflet.js + OpenStreetMap
+
+IMPORTANT RULES:
+- Initialize map ONLY ONCE at page load
+- NEVER recreate or reload the map
+- NEVER refresh tiles manually
+- Only update marker position
+
+---------------------------------------
+4. DATA (EXACT TWO LOCATIONS ONLY):
+---------------------------------------
+
+const places = [
+  {
+    name: "قصر الملك عبدالعزيز - الخرج",
+    lat: 24.1550,
+    lng: 47.3090,
+    short: "قصر تاريخي ارتبط ببدايات الدولة السعودية الحديثة",
+    story: "في قلب الخرج يقف هذا القصر كشاهد على مرحلة تأسيس الدولة..."
+  },
+  {
+    name: "عين الضلع - الخرج",
+    lat: 24.1180,
+    lng: 47.3125,
+    short: "عين مائية قديمة كانت مصدر حياة للقوافل",
+    story: "وسط الصحراء القاسية ظهرت هذه العين كمصدر حياة..."
+  }
+];
+
+---------------------------------------
+5. DEMO MODE (IMPORTANT FOR PRESENTATION):
+---------------------------------------
+Button: "🚗 بدء التجربة"
+
+When clicked:
+- Disable real GPS completely
+- Use fixed demo path:
+
+const demoPath = [
+  { lat: 24.3000, lng: 47.2000 },
+  { lat: 24.2500, lng: 47.2500 },
+  { lat: 24.2000, lng: 47.2800 },
+  { lat: 24.1550, lng: 47.3090 },
+  { lat: 24.1300, lng: 47.3200 },
+  { lat: 24.1180, lng: 47.3125 }
+];
+
+RULES:
+- Move step-by-step every 5–6 seconds
+- NO random movement
+- NO looping automatically after finishing
+- STOP at last point
+
+---------------------------------------
+6. MARKER MOVEMENT (CRITICAL):
+---------------------------------------
+- One marker only
+- Movement must be smooth (interpolated animation)
+- NO teleporting
+- NO instant position change
+
+---------------------------------------
+7. STORY SYSTEM (NO AUDIO):
+---------------------------------------
+When user approaches a place (<50km):
+- Show cinematic text card (NOT popup spam)
+
+Example format:
+
+--------------------------------
+📍 عنوان المشهد
+🏔️ اسم المكان
+
+"نص وثائقي قصير يشرح المكان بأسلوب سينمائي..."
+
+--------------------------------
+
+RULES:
+- Show each story ONCE only
+- Prevent repetition using visited state
+- Store visited places in localStorage
+
+---------------------------------------
+8. JOURNEY FEELING (IMPORTANT):
+---------------------------------------
+After each story show:
+
+"تستمر رحلتك عبر الزمن..."
+
+This creates continuity like a documentary film.
+
+---------------------------------------
+9. UX RULES:
+---------------------------------------
+- No spam notifications
+- No overlapping events
+- No map reloads
+- No UI flickering
+- Everything must feel smooth and intentional
+
+---------------------------------------
+10. MEMORY SYSTEM:
+---------------------------------------
+Use localStorage:
+- Save visited places
+- Mark visited visually on UI:
+  "✔ تم استكشافه"
+
+---------------------------------------
+GOAL:
+---------------------------------------
+Create a clean, stable, cinematic Arabic map experience that feels like a documentary journey through historical places in Al-Kharj.
+
+Focus on:
+- Stability (MOST IMPORTANT)
+- Visual clarity
+- Storytelling quality
+- Smooth movement
+- Zero technical glit
